@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -194,6 +195,34 @@ func TestFirstWriteRotate(t *testing.T) {
 	existsWithContent(backupFile(dir), start, t)
 
 	fileCount(dir, 2, t)
+}
+
+func TestForcedRotateCleanup(t *testing.T) {
+	startingGoroutines := runtime.NumGoroutine()
+
+	dir := makeTempDir("TestTimeBasedRotate", t)
+	defer os.RemoveAll(dir)
+
+	filename := logFile(dir)
+	l := &Logger{
+		Filename: filename,
+		MaxSize:  10,
+	}
+
+	err := l.Rotate()
+	isNil(err, t)
+
+	endingGoroutine := runtime.NumGoroutine()
+
+	// Rotate() created the millRun() goroutine
+	equals(endingGoroutine-startingGoroutines, 1, t)
+
+	err = l.Close()
+	isNil(err, t)
+
+	// Close properly closed the channel thus the goroutine
+	endingGoroutine = runtime.NumGoroutine()
+	equals(endingGoroutine, startingGoroutines, t)
 }
 
 func TestMaxBackups(t *testing.T) {
