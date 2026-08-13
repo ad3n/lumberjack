@@ -1,6 +1,7 @@
 package lumberjack
 
 import (
+	"fmt"
 	"os"
 	"syscall"
 )
@@ -13,7 +14,15 @@ func chown(name string, info os.FileInfo) error {
 	if err != nil {
 		return err
 	}
-	f.Close()
-	stat := info.Sys().(*syscall.Stat_t)
+
+	if err := f.Close(); err != nil {
+		return err
+	}
+
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return fmt.Errorf("unsupported file info type %T", info.Sys())
+	}
+
 	return osChown(name, int(stat.Uid), int(stat.Gid))
 }

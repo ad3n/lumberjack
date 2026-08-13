@@ -110,7 +110,7 @@ type Logger struct {
 	file *os.File
 	mu   sync.Mutex
 
-	millCh    chan bool
+	millCh    chan millConfig
 	startMill sync.Once
 }
 
@@ -136,9 +136,10 @@ func (l *Logger) Write(p []byte) (n int, err error) {
 	defer l.mu.Unlock()
 
 	writeLen := int64(len(p))
-	if writeLen > l.max() {
+	maxSize := l.max()
+	if writeLen > maxSize {
 		return 0, fmt.Errorf(
-			"write length %d exceeds maximum file size %d", writeLen, l.max(),
+			"write length %d exceeds maximum file size %d", writeLen, maxSize,
 		)
 	}
 
@@ -148,7 +149,7 @@ func (l *Logger) Write(p []byte) (n int, err error) {
 		}
 	}
 
-	if l.size+writeLen > l.max() {
+	if l.size+writeLen > maxSize {
 		if err := l.rotate(); err != nil {
 			return 0, err
 		}
@@ -172,8 +173,10 @@ func (l *Logger) close() error {
 	if l.file == nil {
 		return nil
 	}
+
 	err := l.file.Close()
 	l.file = nil
+
 	return err
 }
 
@@ -195,10 +198,13 @@ func (l *Logger) rotate() error {
 	if err := l.close(); err != nil {
 		return err
 	}
+
 	if err := l.openNew(); err != nil {
 		return err
 	}
+
 	l.mill()
+
 	return nil
 }
 
@@ -235,8 +241,10 @@ func (l *Logger) openNew() error {
 	if err != nil {
 		return fmt.Errorf("can't open new logfile: %s", err)
 	}
+
 	l.file = f
 	l.size = 0
+
 	return nil
 }
 
@@ -275,6 +283,7 @@ func (l *Logger) openExistingOrNew(writeLen int) error {
 	if os.IsNotExist(err) {
 		return l.openNew()
 	}
+
 	if err != nil {
 		return fmt.Errorf("error getting log file info: %s", err)
 	}
@@ -289,8 +298,10 @@ func (l *Logger) openExistingOrNew(writeLen int) error {
 		// it and open a new log file.
 		return l.openNew()
 	}
+
 	l.file = file
 	l.size = info.Size()
+
 	return nil
 }
 
@@ -299,50 +310,80 @@ func (l *Logger) filename() string {
 	if l.Filename != "" {
 		return l.Filename
 	}
+
 	name := filepath.Base(os.Args[0]) + "-lumberjack.log"
+
 	return filepath.Join(os.TempDir(), name)
 }
 
-// millRunOnce performs compression and removal of stale log files.
-// Log files are compressed if enabled via configuration and old log
-// files are removed, keeping at most l.MaxBackups files, as long as
-// none of them are older than MaxAge.
-func (l *Logger) millRunOnce() error {
-	if l.MaxBackups == 0 && l.MaxAge == 0 && !l.Compress {
+type millConfig struct {
+	dir        string
+	prefix     string
+	ext        string
+	maxBackups int
+	maxAge     int
+	compress   bool
+	now        time.Time
+}
+
+func (l *Logger) millConfig() millConfig {
+	filename := l.filename()
+	base := filepath.Base(filename)
+	ext := filepath.Ext(base)
+	var now time.Time
+	if l.MaxAge > 0 {
+		now = currentTime()
+	}
+
+	return millConfig{
+		dir:        filepath.Dir(filename),
+		prefix:     base[:len(base)-len(ext)] + "-",
+		ext:        ext,
+		maxBackups: l.MaxBackups,
+		maxAge:     l.MaxAge,
+		compress:   l.Compress,
+		now:        now,
+	}
+}
+
+func millRunOnceConfig(config millConfig) error {
+	if config.maxBackups == 0 && config.maxAge == 0 && !config.compress {
 		return nil
 	}
 
-	files, err := l.oldLogFiles()
+	files, err := oldLogFiles(config.dir, config.prefix, config.ext)
 	if err != nil {
 		return err
 	}
 
 	var compress, remove []logInfo
 
-	if l.MaxBackups > 0 && l.MaxBackups < len(files) {
-		preserved := make(map[string]bool)
-		var remaining []logInfo
+	if config.maxBackups > 0 && config.maxBackups < len(files) {
+		preserved := make(map[string]struct{}, config.maxBackups+1)
+		remaining := make([]logInfo, 0, config.maxBackups)
 		for _, f := range files {
 			// Only count the uncompressed log file or the
 			// compressed log file, not both.
 			fn := f.Name()
 
 			fn = strings.TrimSuffix(fn, compressSuffix)
-			preserved[fn] = true
+			preserved[fn] = struct{}{}
 
-			if len(preserved) > l.MaxBackups {
+			if len(preserved) > config.maxBackups {
 				remove = append(remove, f)
 			} else {
 				remaining = append(remaining, f)
 			}
 		}
+
 		files = remaining
 	}
-	if l.MaxAge > 0 {
-		diff := time.Duration(int64(24*time.Hour) * int64(l.MaxAge))
-		cutoff := currentTime().Add(-1 * diff)
 
-		var remaining []logInfo
+	if config.maxAge > 0 {
+		diff := time.Duration(int64(24*time.Hour) * int64(config.maxAge))
+		cutoff := config.now.Add(-diff)
+
+		remaining := make([]logInfo, 0, len(files))
 		for _, f := range files {
 			if f.timestamp.Before(cutoff) {
 				remove = append(remove, f)
@@ -350,10 +391,11 @@ func (l *Logger) millRunOnce() error {
 				remaining = append(remaining, f)
 			}
 		}
+
 		files = remaining
 	}
 
-	if l.Compress {
+	if config.compress {
 		for _, f := range files {
 			if !strings.HasSuffix(f.Name(), compressSuffix) {
 				compress = append(compress, f)
@@ -362,13 +404,14 @@ func (l *Logger) millRunOnce() error {
 	}
 
 	for _, f := range remove {
-		errRemove := os.Remove(filepath.Join(l.dir(), f.Name()))
+		errRemove := os.Remove(filepath.Join(config.dir, f.Name()))
 		if err == nil && errRemove != nil {
 			err = errRemove
 		}
 	}
+
 	for _, f := range compress {
-		fn := filepath.Join(l.dir(), f.Name())
+		fn := filepath.Join(config.dir, f.Name())
 		errCompress := compressLogFile(fn, fn+compressSuffix)
 		if err == nil && errCompress != nil {
 			err = errCompress
@@ -381,21 +424,23 @@ func (l *Logger) millRunOnce() error {
 // millRun runs in a goroutine to manage post-rotation compression and removal
 // of old log files.
 func (l *Logger) millRun() {
-	for range l.millCh {
+	for config := range l.millCh {
 		// what am I going to do, log this?
-		_ = l.millRunOnce()
+		_ = millRunOnceConfig(config)
 	}
 }
 
 // mill performs post-rotation compression and removal of stale log files,
 // starting the mill goroutine if necessary.
 func (l *Logger) mill() {
+	config := l.millConfig()
 	l.startMill.Do(func() {
-		l.millCh = make(chan bool, 1)
+		l.millCh = make(chan millConfig, 1)
 		go l.millRun()
 	})
+
 	select {
-	case l.millCh <- true:
+	case l.millCh <- config:
 	default:
 	}
 }
@@ -403,28 +448,38 @@ func (l *Logger) mill() {
 // oldLogFiles returns the list of backup log files stored in the same
 // directory as the current log file, sorted by ModTime
 func (l *Logger) oldLogFiles() ([]logInfo, error) {
-	files, err := os.ReadDir(l.dir())
+	config := l.millConfig()
+
+	return oldLogFiles(config.dir, config.prefix, config.ext)
+}
+
+func oldLogFiles(dir, prefix, ext string) ([]logInfo, error) {
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("can't read log file directory: %s", err)
 	}
-	logFiles := []logInfo{}
 
-	prefix, ext := l.prefixAndExt()
+	capacity := len(files)
+	if capacity > 64 {
+		capacity = 64
+	}
+
+	logFiles := make([]logInfo, 0, capacity)
 
 	for _, f := range files {
 		if f.IsDir() {
 			continue
 		}
-		if t, err := l.timeFromName(f.Name(), prefix, ext); err == nil {
+
+		if t, err := timeFromName(f.Name(), prefix, ext); err == nil {
 			logFiles = append(logFiles, logInfo{t, f})
 			continue
 		}
-		if t, err := l.timeFromName(f.Name(), prefix, ext+compressSuffix); err == nil {
+
+		if t, err := timeFromName(f.Name(), prefix, ext+compressSuffix); err == nil {
 			logFiles = append(logFiles, logInfo{t, f})
 			continue
 		}
-		// error parsing means that the suffix at the end was not generated
-		// by lumberjack, and therefore it's not a backup file.
 	}
 
 	sort.Sort(byFormatTime(logFiles))
@@ -436,13 +491,20 @@ func (l *Logger) oldLogFiles() ([]logInfo, error) {
 // the filename's prefix and extension. This prevents someone's filename from
 // confusing time.parse.
 func (l *Logger) timeFromName(filename, prefix, ext string) (time.Time, error) {
+	return timeFromName(filename, prefix, ext)
+}
+
+func timeFromName(filename, prefix, ext string) (time.Time, error) {
 	if !strings.HasPrefix(filename, prefix) {
 		return time.Time{}, errors.New("mismatched prefix")
 	}
+
 	if !strings.HasSuffix(filename, ext) {
 		return time.Time{}, errors.New("mismatched extension")
 	}
+
 	ts := filename[len(prefix) : len(filename)-len(ext)]
+
 	return time.Parse(backupTimeFormat, ts)
 }
 
@@ -451,6 +513,7 @@ func (l *Logger) max() int64 {
 	if l.MaxSize == 0 {
 		return int64(defaultMaxSize * megabyte)
 	}
+
 	return int64(l.MaxSize) * int64(megabyte)
 }
 
