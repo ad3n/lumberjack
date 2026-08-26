@@ -76,6 +76,9 @@ var _ io.WriteCloser = (*Logger)(nil)
 //
 // If MaxBackups and MaxAge are both 0, no old log files will be deleted.
 type Logger struct {
+	file *os.File
+
+	millCh chan millConfig
 	// Filename is the file to write logs to.  Backup log files will be retained
 	// in the same directory.  It uses <processname>-lumberjack.log in
 	// os.TempDir() if empty.
@@ -97,6 +100,10 @@ type Logger struct {
 	// deleted.)
 	MaxBackups int `json:"maxbackups" yaml:"maxbackups"`
 
+	size      int64
+	startMill sync.Once
+	mu        sync.Mutex
+
 	// LocalTime determines if the time used for formatting the timestamps in
 	// backup files is the computer's local time.  The default is to use UTC
 	// time.
@@ -105,13 +112,6 @@ type Logger struct {
 	// Compress determines if the rotated log files should be compressed
 	// using gzip. The default is not to perform compression.
 	Compress bool `json:"compress" yaml:"compress"`
-
-	size int64
-	file *os.File
-	mu   sync.Mutex
-
-	millCh    chan millConfig
-	startMill sync.Once
 }
 
 var (
@@ -317,13 +317,13 @@ func (l *Logger) filename() string {
 }
 
 type millConfig struct {
+	now        time.Time
 	dir        string
 	prefix     string
 	ext        string
 	maxBackups int
 	maxAge     int
 	compress   bool
-	now        time.Time
 }
 
 func (l *Logger) millConfig() millConfig {
