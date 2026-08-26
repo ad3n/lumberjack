@@ -28,7 +28,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -482,7 +482,9 @@ func oldLogFiles(dir, prefix, ext string) ([]logInfo, error) {
 		}
 	}
 
-	sort.Sort(byFormatTime(logFiles))
+	slices.SortFunc(logFiles, func(a, b logInfo) int {
+		return b.timestamp.Compare(a.timestamp)
+	})
 
 	return logFiles, nil
 }
@@ -591,19 +593,4 @@ func compressLogFile(src, dst string) (err error) {
 type logInfo struct {
 	timestamp time.Time
 	os.DirEntry
-}
-
-// byFormatTime sorts by newest time formatted in the name.
-type byFormatTime []logInfo
-
-func (b byFormatTime) Less(i, j int) bool {
-	return b[i].timestamp.After(b[j].timestamp)
-}
-
-func (b byFormatTime) Swap(i, j int) {
-	b[i], b[j] = b[j], b[i]
-}
-
-func (b byFormatTime) Len() int {
-	return len(b)
 }

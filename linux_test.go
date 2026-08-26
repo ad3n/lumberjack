@@ -1,4 +1,4 @@
-// +build linux
+//go:build linux
 
 package lumberjack
 
@@ -116,7 +116,7 @@ func TestCompressMaintainMode(t *testing.T) {
 
 	// we need to wait a little bit since the files get compressed on a different
 	// goroutine.
-	<-time.After(10 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	// a compressed version of the log file should now exist with the correct
 	// mode.
@@ -166,7 +166,7 @@ func TestCompressMaintainOwner(t *testing.T) {
 
 	// we need to wait a little bit since the files get compressed on a different
 	// goroutine.
-	<-time.After(10 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	// a compressed version of the log file should now exist with the correct
 	// owner.

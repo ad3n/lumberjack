@@ -246,7 +246,7 @@ func TestMaxBackups(t *testing.T) {
 
 	// we need to wait a little bit since the files get deleted on a different
 	// goroutine.
-	<-time.After(time.Millisecond * 10)
+	time.Sleep(10 * time.Millisecond)
 
 	// should only have two files in the dir still
 	fileCount(dir, 2, t)
@@ -296,7 +296,7 @@ func TestMaxBackups(t *testing.T) {
 
 	// we need to wait a little bit since the files get deleted on a different
 	// goroutine.
-	<-time.After(time.Millisecond * 10)
+	time.Sleep(10 * time.Millisecond)
 
 	// We should have four things in the directory now - the 2 log files, the
 	// not log file, and the directory
@@ -367,7 +367,7 @@ func TestCleanupExistingBackups(t *testing.T) {
 
 	// we need to wait a little bit since the files get deleted on a different
 	// goroutine.
-	<-time.After(time.Millisecond * 10)
+	time.Sleep(10 * time.Millisecond)
 
 	// now we should only have 2 files left - the primary and one backup
 	fileCount(dir, 2, t)
@@ -406,7 +406,7 @@ func TestMaxAge(t *testing.T) {
 
 	// we need to wait a little bit since the files get deleted on a different
 	// goroutine.
-	<-time.After(10 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	// We should still have 2 log files, since the most recent backup was just
 	// created.
@@ -428,7 +428,7 @@ func TestMaxAge(t *testing.T) {
 
 	// we need to wait a little bit since the files get deleted on a different
 	// goroutine.
-	<-time.After(10 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	// We should have 2 log files - the main log file, and the most recent
 	// backup.  The earlier backup is past the cutoff and should be gone.
@@ -557,7 +557,7 @@ func TestRotate(t *testing.T) {
 
 	// we need to wait a little bit since the files get deleted on a different
 	// goroutine.
-	<-time.After(10 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	filename2 := backupFile(dir)
 	existsWithContent(filename2, b, t)
@@ -570,7 +570,7 @@ func TestRotate(t *testing.T) {
 
 	// we need to wait a little bit since the files get deleted on a different
 	// goroutine.
-	<-time.After(10 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	filename3 := backupFile(dir)
 	existsWithContent(filename3, []byte{}, t)
@@ -619,7 +619,7 @@ func TestCompressOnRotate(t *testing.T) {
 
 	// we need to wait a little bit since the files get compressed on a different
 	// goroutine.
-	<-time.After(300 * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 
 	// a compressed version of the log file should now exist and the original
 	// should have been removed.
@@ -668,7 +668,7 @@ func TestCompressOnResume(t *testing.T) {
 
 	// we need to wait a little bit since the files get compressed on a different
 	// goroutine.
-	<-time.After(300 * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 
 	// The write should have started the compression - a compressed version of
 	// the log file should now exist and the original should have been removed.
