@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -110,6 +111,23 @@ func TestWriteTooLong(t *testing.T) {
 		fmt.Sprintf("write length %d exceeds maximum file size %d", len(b), l.MaxSize), t)
 	_, err = os.Stat(logFile(dir))
 	assert(os.IsNotExist(err), t, "File exists, but should not have been created")
+}
+
+func TestMaxSizeDoesNotOverflow(t *testing.T) {
+	l := &Logger{MaxSize: math.MaxInt}
+	want := int64(math.MaxInt) * int64(megabyte)
+	if int64(math.MaxInt) > math.MaxInt64/int64(megabyte) {
+		want = math.MaxInt64
+	}
+	if got := l.max(); got != want {
+		t.Fatalf("max() = %d, want %d", got, want)
+	}
+}
+
+func TestMaxAgeDoesNotOverflow(t *testing.T) {
+	if got := maxAgeDuration(math.MaxInt); got != time.Duration(math.MaxInt64) {
+		t.Fatalf("maxAgeDuration() = %s, want saturation at %s", got, time.Duration(math.MaxInt64))
+	}
 }
 
 func TestMakeLogDir(t *testing.T) {

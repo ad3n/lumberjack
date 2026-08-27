@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -149,7 +150,8 @@ func (l *Logger) Write(p []byte) (n int, err error) {
 		}
 	}
 
-	if l.size+writeLen > maxSize {
+	// Subtraction keeps the size check correct even near MaxInt64.
+	if l.size > maxSize-writeLen {
 		if err := l.rotate(); err != nil {
 			return 0, err
 		}
@@ -281,7 +283,10 @@ func (l *Logger) openExistingOrNew(writeLen int) error {
 		return fmt.Errorf("error getting log file info: %s", err)
 	}
 
-	if info.Size()+int64(writeLen) >= l.max() {
+	maxSize := l.max()
+	// Use subtraction so a very large existing file cannot overflow int64 and
+	// bypass rotation.
+	if int64(writeLen) >= maxSize || info.Size() >= maxSize-int64(writeLen) {
 		return l.rotate()
 	}
 
@@ -373,7 +378,7 @@ func millRunOnceConfig(config millConfig) error {
 	}
 
 	if config.maxAge > 0 {
-		diff := time.Duration(int64(24*time.Hour) * int64(config.maxAge))
+		diff := maxAgeDuration(config.maxAge)
 		cutoff := config.now.Add(-diff)
 
 		remaining := make([]logInfo, 0, len(files))
@@ -509,7 +514,23 @@ func (l *Logger) max() int64 {
 		return int64(defaultMaxSize * megabyte)
 	}
 
-	return int64(l.MaxSize) * int64(megabyte)
+	maxSize := int64(l.MaxSize)
+	unit := int64(megabyte)
+	if maxSize > 0 && unit > 0 && maxSize > math.MaxInt64/unit {
+		return math.MaxInt64
+	}
+
+	return maxSize * unit
+}
+
+// maxAgeDuration converts days to a duration without wrapping large values
+// into a negative duration, which could otherwise remove recent backups.
+func maxAgeDuration(days int) time.Duration {
+	const day = 24 * time.Hour
+	if days > int(math.MaxInt64/int64(day)) {
+		return time.Duration(math.MaxInt64)
+	}
+	return time.Duration(days) * day
 }
 
 // dir returns the directory for the current filename.
