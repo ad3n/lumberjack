@@ -143,7 +143,7 @@ func (l *Logger) Write(p []byte) (n int, err error) {
 		)
 	}
 
-	if l.file == nil || l.isNotExist() {
+	if l.file == nil || fileWasRemoved(l.file, l) {
 		if err = l.openExistingOrNew(len(p)); err != nil {
 			return 0, err
 		}
@@ -263,13 +263,6 @@ func backupName(name string, local bool) string {
 
 	timestamp := t.Format(backupTimeFormat)
 	return filepath.Join(dir, fmt.Sprintf("%s-%s%s", prefix, timestamp, ext))
-}
-
-func (l *Logger) isNotExist() bool {
-	filename := l.filename()
-	_, err := osStat(filename)
-
-	return os.IsNotExist(err)
 }
 
 // openExistingOrNew opens the logfile if it exists and if the current write

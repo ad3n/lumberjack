@@ -70,6 +70,28 @@ func TestOpenExisting(t *testing.T) {
 	fileCount(dir, 1, t)
 }
 
+func TestRecreateRemovedLogFile(t *testing.T) {
+	currentTime = fakeTime
+	dir := makeTempDir("TestRecreateRemovedLogFile", t)
+	defer os.RemoveAll(dir)
+
+	filename := logFile(dir)
+	l := &Logger{Filename: filename}
+	defer l.Close()
+
+	if _, err := l.Write([]byte("before removal")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filename); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := l.Write([]byte("after removal")); err != nil {
+		t.Fatal(err)
+	}
+
+	existsWithContent(filename, []byte("after removal"), t)
+}
+
 func TestWriteTooLong(t *testing.T) {
 	currentTime = fakeTime
 	megabyte = 1
