@@ -27,6 +27,14 @@ func fakeTime() time.Time {
 	return fakeCurrentTime
 }
 
+func TestMillDisabledDoesNotStartWorker(t *testing.T) {
+	l := &Logger{}
+	l.mill()
+	if l.millCh != nil {
+		t.Fatal("default configuration started an unnecessary mill worker")
+	}
+}
+
 func TestNewFile(t *testing.T) {
 	currentTime = fakeTime
 

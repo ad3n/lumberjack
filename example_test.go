@@ -1,6 +1,7 @@
 package lumberjack
 
 import (
+	"bufio"
 	"log"
 )
 
@@ -14,4 +15,20 @@ func Example() {
 		MaxAge:     28,   // days
 		Compress:   true, // disabled by default
 	})
+}
+
+// Buffering amortizes filesystem and file-removal-check syscalls for
+// high-volume logging. Flush the buffer before closing or rotating the logger.
+func ExampleLogger_buffered() {
+	l := &Logger{
+		Filename:   "/var/log/myapp/foo.log",
+		MaxSize:    500,
+		MaxBackups: 3,
+	}
+	w := bufio.NewWriterSize(l, 4096)
+	log.SetOutput(w)
+
+	// Before application shutdown:
+	_ = w.Flush()
+	_ = l.Close()
 }

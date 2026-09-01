@@ -41,6 +41,24 @@ log.SetOutput(&lumberjack.Logger{
 })
 ```
 
+For high-volume logging with many small writes, callers can batch writes with
+the standard library's `bufio.Writer` without changing lumberjack's default
+behavior:
+
+```go
+l := &lumberjack.Logger{Filename: "/var/log/myapp/foo.log"}
+w := bufio.NewWriterSize(l, 4096)
+log.SetOutput(w)
+
+// Flush before closing or explicitly rotating the logger.
+_ = w.Flush()
+_ = l.Close()
+```
+
+Buffering is opt-in because it changes when log data reaches the operating
+system. Applications should choose flush points that match their durability
+requirements.
+
 
 
 ## type Logger

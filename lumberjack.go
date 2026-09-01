@@ -431,6 +431,12 @@ func (l *Logger) millRun() {
 // mill performs post-rotation compression and removal of stale log files,
 // starting the mill goroutine if necessary.
 func (l *Logger) mill() {
+	// Avoid allocating a config, channel, and permanent worker goroutine when
+	// post-rotation processing is disabled (the default configuration).
+	if l.MaxBackups == 0 && l.MaxAge == 0 && !l.Compress {
+		return
+	}
+
 	config := l.millConfig()
 	l.startMill.Do(func() {
 		l.millCh = make(chan millConfig, 1)
