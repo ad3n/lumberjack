@@ -22,7 +22,6 @@
 package lumberjack
 
 import (
-	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
@@ -553,8 +552,6 @@ func (l *Logger) prefixAndExt() (prefix, ext string) {
 	return prefix, ext
 }
 
-// compressLogFile compresses the given log file, removing the
-// uncompressed log file if successful.
 func compressLogFile(src, dst string) (err error) {
 	f, err := os.Open(src)
 	if err != nil {
@@ -571,15 +568,14 @@ func compressLogFile(src, dst string) (err error) {
 		return fmt.Errorf("failed to chown compressed log file: %v", err)
 	}
 
-	// If this file already exists, we presume it was created by
-	// a previous attempt to compress the log file.
 	gzf, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fi.Mode())
 	if err != nil {
 		return fmt.Errorf("failed to open compressed log file: %v", err)
 	}
 	defer gzf.Close()
 
-	gz := gzip.NewWriter(gzf)
+	gz := compressionWriters.get(gzf)
+	defer compressionWriters.put(gz)
 
 	defer func() {
 		if err != nil {
@@ -591,9 +587,11 @@ func compressLogFile(src, dst string) (err error) {
 	if _, err := io.Copy(gz, f); err != nil {
 		return err
 	}
+
 	if err := gz.Close(); err != nil {
 		return err
 	}
+
 	if err := gzf.Close(); err != nil {
 		return err
 	}
@@ -601,6 +599,7 @@ func compressLogFile(src, dst string) (err error) {
 	if err := f.Close(); err != nil {
 		return err
 	}
+
 	if err := os.Remove(src); err != nil {
 		return err
 	}
