@@ -209,3 +209,15 @@ A later `Write` or `Rotate` can reopen the logger and restart cleanup as needed.
 Cleanup disabled by default does not start a worker. Compressed backups are
 flushed, synced, closed, and atomically renamed from a temporary `.gz.tmp` file
 before the source is removed. Failed compression preserves an existing archive.
+
+### Go toolchain and allocation behavior
+
+Development, CI, and the module minimum version require Go 1.27.3.
+
+On Darwin/Linux, steady-state log writes avoid heap allocations. Warmed
+compression-buffer copies also avoid heap allocations. Complete compression
+still allocates for filesystem operations.
+The compression buffer cache holds at most four 32 KiB payload buffers plus
+reader metadata and allocator overhead. It clears reader references before
+reuse and does not start background workers. Durability and atomic publication
+remain unchanged.

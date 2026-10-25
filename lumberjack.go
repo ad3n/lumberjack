@@ -191,7 +191,7 @@ func backupName(name string, local bool) string {
 	}
 
 	timestamp := t.Format(backupTimeFormat)
-	return filepath.Join(dir, fmt.Sprintf("%s-%s%s", prefix, timestamp, ext))
+	return filepath.Join(dir, prefix+"-"+timestamp+ext)
 }
 
 func (l *Logger) openExistingOrNew(writeLen int) error {
@@ -452,7 +452,12 @@ func compressLogFile(src, dst string) (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %v", err)
 	}
-	defer f.Close()
+	sourceClosed := false
+	defer func() {
+		if !sourceClosed {
+			_ = f.Close()
+		}
+	}()
 
 	fi, err := osStat(src)
 	if err != nil {
@@ -474,7 +479,12 @@ func compressLogFile(src, dst string) (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to open compressed log file: %v", err)
 	}
-	defer gzf.Close()
+	destinationClosed := false
+	defer func() {
+		if !destinationClosed {
+			_ = gzf.Close()
+		}
+	}()
 
 	gz := compressionWriters.get(gzf)
 	defer func() {
@@ -484,7 +494,7 @@ func compressLogFile(src, dst string) (err error) {
 		}
 	}()
 
-	if _, err := io.Copy(gz, f); err != nil {
+	if _, err := compressionBuffers.copy(gz, f); err != nil {
 		return err
 	}
 
@@ -496,10 +506,12 @@ func compressLogFile(src, dst string) (err error) {
 		return err
 	}
 
+	destinationClosed = true
 	if err := gzf.Close(); err != nil {
 		return err
 	}
 
+	sourceClosed = true
 	if err := f.Close(); err != nil {
 		return err
 	}

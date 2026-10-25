@@ -1,11 +1,12 @@
 language: go
 
 go:
-  - tip
-  - 1.15.x
-  - 1.14.x
-  - 1.13.x
-  - 1.12.x
-  
-env:
-  - GO111MODULE=on
+  - 1.27.3
+
+script:
+  - go test ./...
+  - go test -race ./...
+  - go test -gcflags=all=-d=checkptr=2 ./...
+  - go vet ./...
+  - go test -run '^$' -bench . -benchmem ./...
+  - git diff --check
