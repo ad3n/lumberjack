@@ -145,8 +145,8 @@ func TestPooledCompressionFiles(t *testing.T) {
 					t.Fatal("expected directory read failure")
 				}
 
-				if _, err := os.Stat(dst); !os.IsNotExist(err) {
-					t.Fatalf("partial destination not removed: %v", err)
+				if _, err := os.Stat(dst + tmpSuffix); !os.IsNotExist(err) {
+					t.Fatalf("temporary destination not removed: %v", err)
 				}
 
 				if err := os.Remove(src); err != nil {
@@ -159,7 +159,7 @@ func TestPooledCompressionFiles(t *testing.T) {
 				}
 
 				if err := compressLogFile(src, dir); err == nil {
-					t.Fatal("expected destination open failure")
+					t.Fatal("expected destination publish failure")
 				}
 
 				if err := compressLogFile(src, dst); err != nil {

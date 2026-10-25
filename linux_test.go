@@ -171,8 +171,8 @@ func TestCompressMaintainOwner(t *testing.T) {
 	// a compressed version of the log file should now exist with the correct
 	// owner.
 	filename2 := backupFile(dir)
-	equals(555, fakeFS.files[filename2+compressSuffix].uid, t)
-	equals(666, fakeFS.files[filename2+compressSuffix].gid, t)
+	equals(555, fakeFS.files[filename2+compressSuffix+tmpSuffix].uid, t)
+	equals(666, fakeFS.files[filename2+compressSuffix+tmpSuffix].gid, t)
 }
 
 type fakeFile struct {
